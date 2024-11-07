@@ -109,12 +109,12 @@ void SceneShaderForwardMobile::ShaderData::set_code(const String &p_code) {
 
 	actions.render_mode_values["depth_test_disabled"] = Pair<int *, int>(&depth_testi, DEPTH_TEST_DISABLED);
 
+	actions.render_mode_values["depth_function_greater_or_equal"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_GREATER_OR_EQUAL);
 	actions.render_mode_values["depth_function_less_or_equal"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_LESS_OR_EQUAL);
 	actions.render_mode_values["depth_function_less"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_LESS);
 	actions.render_mode_values["depth_function_equal"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_EQUAL);
 	actions.render_mode_values["depth_function_greater"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_GREATER);
 	actions.render_mode_values["depth_function_not_equal"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_NOT_EQUAL);
-	actions.render_mode_values["depth_function_greater_or_equal"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_GREATER_OR_EQUAL);
 	actions.render_mode_values["depth_function_always"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_ALWAYS);
 	actions.render_mode_values["depth_function_never"] = Pair<int *, int>(&depth_functioni, DEPTH_FUNCTION_NEVER);
 
@@ -295,12 +295,12 @@ void SceneShaderForwardMobile::ShaderData::_create_pipeline(PipelineKey p_pipeli
 		depth_stencil_state.enable_depth_write = depth_draw != DEPTH_DRAW_DISABLED ? true : false;
 
 		RD::CompareOperator depth_function_rd_table[DEPTH_FUNCTION_MAX] = {
+			RD::COMPARE_OP_GREATER_OR_EQUAL,
 			RD::COMPARE_OP_LESS_OR_EQUAL,
 			RD::COMPARE_OP_LESS,
 			RD::COMPARE_OP_EQUAL,
 			RD::COMPARE_OP_GREATER,
 			RD::COMPARE_OP_NOT_EQUAL,
-			RD::COMPARE_OP_GREATER_OR_EQUAL,
 			RD::COMPARE_OP_ALWAYS,
 			RD::COMPARE_OP_NEVER,
 		};

@@ -3438,7 +3438,7 @@ void BaseMaterial3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "blend_mode", PROPERTY_HINT_ENUM, "Mix,Add,Subtract,Multiply,Premultiplied Alpha"), "set_blend_mode", "get_blend_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "cull_mode", PROPERTY_HINT_ENUM, "Back,Front,Disabled"), "set_cull_mode", "get_cull_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "depth_draw_mode", PROPERTY_HINT_ENUM, "Opaque Only,Always,Never"), "set_depth_draw_mode", "get_depth_draw_mode");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "depth_function", PROPERTY_HINT_ENUM, "Less or Equal,Less,Equal,Greater,Not Equal,Greater or Equal,Always,Never"), "set_depth_function", "get_depth_function");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "depth_function", PROPERTY_HINT_ENUM, "Greater or Equal,Less or Equal,Less,Equal,Greater,Not Equal,Always,Never"), "set_depth_function", "get_depth_function");
 	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "no_depth_test"), "set_flag", "get_flag", FLAG_DISABLE_DEPTH_TEST);
 
 	ADD_GROUP("Shading", "");
@@ -3684,12 +3684,12 @@ void BaseMaterial3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(DEPTH_DRAW_ALWAYS);
 	BIND_ENUM_CONSTANT(DEPTH_DRAW_DISABLED);
 
+	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_GREATER_OR_EQUAL);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_LESS_OR_EQUAL);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_LESS);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_EQUAL);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_GREATER);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_NOT_EQUAL);
-	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_GREATER_OR_EQUAL);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_ALWAYS);
 	BIND_ENUM_CONSTANT(DEPTH_FUNCTION_NEVER);
 
