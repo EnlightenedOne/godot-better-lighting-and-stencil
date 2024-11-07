@@ -37,6 +37,7 @@
 #include "visual_shader_nodes.h"
 #include "visual_shader_particle_nodes.h"
 #include "visual_shader_sdf_nodes.h"
+#include "scene/resources/material.h"
 
 String make_unique_id(VisualShader::Type p_type, int p_id, const String &p_name) {
 	static const char *typepf[VisualShader::TYPE_MAX] = { "vtx", "frg", "lgt", "start", "process", "collide", "start_custom", "process_custom", "sky", "fog" };
@@ -1717,7 +1718,8 @@ bool VisualShader::_set(const StringName &p_name, const Variant &p_value) {
 	} else if (prop_name.begins_with("modes/")) {
 		String mode_name = prop_name.get_slicec('/', 1);
 		int value = p_value;
-		if (value == 0) {
+
+		if (value == 0 && mode_name != "depth_function") {
 			modes.erase(mode_name); //means it's default anyway, so don't store it
 		} else {
 			modes[mode_name] = value;
@@ -1832,6 +1834,8 @@ bool VisualShader::_get(const StringName &p_name, Variant &r_ret) const {
 		String mode_name = prop_name.get_slicec('/', 1);
 		if (modes.has(mode_name)) {
 			r_ret = modes[mode_name];
+		} else if (mode_name == "depth_function") {
+			r_ret = BaseMaterial3D::DEPTH_FUNCTION_GREATER_OR_EQUAL;
 		} else {
 			r_ret = 0;
 		}
@@ -2658,7 +2662,12 @@ void VisualShader::_update_shader() const {
 					render_mode += temp + "_" + info.options[modes[temp]];
 				} else {
 					// Use the default.
-					render_mode += temp + "_" + info.options[0];
+					if (temp == "depth_function") {
+						render_mode += temp + "_" + info.options[BaseMaterial3D::DEPTH_FUNCTION_GREATER_OR_EQUAL];
+					} else {
+						render_mode += temp + "_" + info.options[0];
+					}
+
 				}
 			} else if (flags.has(temp)) {
 				flag_names.push_back(temp);
