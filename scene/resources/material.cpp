@@ -798,28 +798,28 @@ void BaseMaterial3D::_update_shader() {
 
 	switch (depth_function) {
 		case DEPTH_FUNCTION_LESS_OR_EQUAL:
-			code += ",depth_function_less_or_equal";
+			code += ", depth_function_less_or_equal";
 			break;
 		case DEPTH_FUNCTION_LESS:
-			code += ",depth_function_less";
+			code += ", depth_function_less";
 			break;
 		case DEPTH_FUNCTION_EQUAL:
-			code += ",depth_function_equal";
+			code += ", depth_function_equal";
 			break;
 		case DEPTH_FUNCTION_GREATER:
-			code += ",depth_function_greater";
+			code += ", depth_function_greater";
 			break;
 		case DEPTH_FUNCTION_NOT_EQUAL:
-			code += ",depth_function_not_equal";
+			code += ", depth_function_not_equal";
 			break;
 		case DEPTH_FUNCTION_GREATER_OR_EQUAL:
-			code += ",depth_function_greater_or_equal";
+			code += ", depth_function_greater_or_equal";
 			break;
 		case DEPTH_FUNCTION_ALWAYS:
-			code += ",depth_function_always";
+			code += ", depth_function_always";
 			break;
 		case DEPTH_FUNCTION_NEVER:
-			code += ",depth_function_never";
+			code += ", depth_function_never";
 			break;
 		case DEPTH_FUNCTION_MAX:
 			break; // Internal value, skip.
