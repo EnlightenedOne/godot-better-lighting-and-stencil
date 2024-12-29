@@ -359,7 +359,8 @@ void RendererSceneRenderRD::_render_buffers_copy_screen_texture(const RenderData
 			copy_effects->copy_to_fb_rect(texture, fb, Rect2i(0, 0, size.x, size.y));
 		}
 
-		for (int i = 1; i < mipmaps; i++) {
+		// For performance reasons (SteamDeck) cap sampling of the screen tex to LOD 0 and dont bother copying the child mipmaps
+		/*for (int i = 1; i < mipmaps; i++) {
 			RID source = dest;
 			dest = rb->get_texture_slice(RB_SCOPE_BUFFERS, texture_name, v, i);
 			Size2i msize = rb->get_texture_slice_size(RB_SCOPE_BUFFERS, texture_name, i);
@@ -369,7 +370,7 @@ void RendererSceneRenderRD::_render_buffers_copy_screen_texture(const RenderData
 			} else {
 				copy_effects->make_mipmap_raster(source, dest, msize);
 			}
-		}
+		}*/
 	}
 
 	RD::get_singleton()->draw_command_end_label();
