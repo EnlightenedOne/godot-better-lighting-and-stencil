@@ -161,6 +161,7 @@ public:
 			STENCIL_FLAG_READ = 1,
 			STENCIL_FLAG_WRITE = 2,
 			STENCIL_FLAG_WRITE_DEPTH_FAIL = 4,
+			STENCIL_FLAG_INCREMENT_CLAMP = 8,
 		};
 
 		enum StencilCompare {
@@ -309,7 +310,9 @@ public:
 		uint32_t index = 0;
 		RID next_pass;
 		uint8_t priority;
+		uint8_t render_layer;
 		virtual void set_render_priority(int p_priority);
+		virtual void set_render_layer(int p_render_layer);
 		virtual void set_next_pass(RID p_pass);
 		virtual bool update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
 		virtual ~MaterialData();

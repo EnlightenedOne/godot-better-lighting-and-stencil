@@ -77,8 +77,12 @@ class RenderForwardClustered : public RendererSceneRenderRD {
 		RENDER_LIST_OPAQUE, //used for opaque objects
 		RENDER_LIST_MOTION, //used for opaque objects with motion
 		RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS, // Used for opaque objects which cannot use depth prepass.
-		RENDER_LIST_ALPHA, //used for transparent objects
+		RENDER_LIST_ALPHA, // Draw transparent objects here + stencil increment on ocean layer
 		RENDER_LIST_SECONDARY, //used for shadows and other objects
+		RENDER_LIST_STENCIL_ALPHA, // Used for drawing to the stencil buffer with opaque + transparent contributions, the x-ray component must be in here for the final output
+		RENDER_LIST_STENCIL_POST_OPAQUE, // Used for marking a stencil for ocean and post processing ocean fog/caustic
+		RENDER_LIST_STENCIL_POST_ALPHA, // Draw stencil incremented ocean over the top of the alpha + PostProcessing effects on top
+		RENDER_LIST_PRE_ALPHA_OVERLAY, // Draw ocean here
 		RENDER_LIST_MAX
 	};
 

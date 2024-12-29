@@ -86,6 +86,7 @@ void SceneShaderForwardMobile::ShaderData::set_code(const String &p_code) {
 	int stencil_readi = 0;
 	int stencil_writei = 0;
 	int stencil_write_depth_faili = 0;
+	int stencil_flag_increment_clampi = 0;
 	int stencil_comparei = STENCIL_COMPARE_ALWAYS;
 	int stencil_referencei = -1;
 
@@ -158,6 +159,7 @@ void SceneShaderForwardMobile::ShaderData::set_code(const String &p_code) {
 	actions.stencil_mode_values["read"] = Pair<int *, int>(&stencil_readi, STENCIL_FLAG_READ);
 	actions.stencil_mode_values["write"] = Pair<int *, int>(&stencil_writei, STENCIL_FLAG_WRITE);
 	actions.stencil_mode_values["write_depth_fail"] = Pair<int *, int>(&stencil_write_depth_faili, STENCIL_FLAG_WRITE_DEPTH_FAIL);
+	actions.stencil_mode_values["write_st_increment"] = Pair<int *, int>(&stencil_flag_increment_clampi, STENCIL_FLAG_INCREMENT_CLAMP);
 
 	actions.stencil_mode_values["compare_less"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_LESS);
 	actions.stencil_mode_values["compare_equal"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_EQUAL);
@@ -192,7 +194,7 @@ void SceneShaderForwardMobile::ShaderData::set_code(const String &p_code) {
 	uses_tangent |= uses_normal_map;
 
 	stencil_enabled = stencil_referencei != -1;
-	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili;
+	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili | stencil_flag_increment_clampi;
 	stencil_compare = StencilCompare(stencil_comparei);
 	stencil_reference = stencil_referencei;
 
@@ -337,6 +339,8 @@ void SceneShaderForwardMobile::ShaderData::_create_pipeline(PipelineKey p_pipeli
 
 		if (stencil_flags & STENCIL_FLAG_WRITE) {
 			op.pass = RD::STENCIL_OP_REPLACE;
+			op.pass = (stencil_flags & STENCIL_FLAG_INCREMENT_CLAMP) == STENCIL_FLAG_INCREMENT_CLAMP ?
+						RD::STENCIL_OP_DECREMENT_AND_CLAMP : RD::STENCIL_OP_REPLACE;
 			op.write_mask = stencil_mask;
 		}
 
@@ -506,6 +510,10 @@ RendererRD::MaterialStorage::ShaderData *SceneShaderForwardMobile::_create_shade
 
 void SceneShaderForwardMobile::MaterialData::set_render_priority(int p_priority) {
 	priority = p_priority - RS::MATERIAL_RENDER_PRIORITY_MIN; //8 bits
+}
+
+void SceneShaderForwardMobile::MaterialData::set_render_layer(int p_render_layer) {
+	render_layer = p_render_layer; //8 bits
 }
 
 void SceneShaderForwardMobile::MaterialData::set_next_pass(RID p_pass) {

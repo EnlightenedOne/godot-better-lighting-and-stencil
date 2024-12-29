@@ -75,6 +75,18 @@ int Material::get_render_priority() const {
 	return render_priority;
 }
 
+void Material::set_render_layer(RenderLayer p_render_layer) {
+	render_layer = p_render_layer;
+
+	if (material.is_valid()) {
+		RS::get_singleton()->material_set_render_layer(material, p_render_layer);
+	}
+}
+
+Material::RenderLayer Material::get_render_layer() const {
+	return render_layer;
+}
+
 RID Material::get_rid() const {
 	return material;
 }
@@ -84,6 +96,9 @@ void Material::_validate_property(PropertyInfo &p_property) const {
 		p_property.usage = PROPERTY_USAGE_NONE;
 	}
 	if (!_can_use_render_priority() && p_property.name == "render_priority") {
+		p_property.usage = PROPERTY_USAGE_NONE;
+	}
+	if (!_can_use_render_priority() && p_property.name == "render_layer") {
 		p_property.usage = PROPERTY_USAGE_NONE;
 	}
 }
@@ -154,16 +169,26 @@ void Material::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_render_priority", "priority"), &Material::set_render_priority);
 	ClassDB::bind_method(D_METHOD("get_render_priority"), &Material::get_render_priority);
 
+	ClassDB::bind_method(D_METHOD("set_render_layer", "render_layer"), &Material::set_render_layer);
+	ClassDB::bind_method(D_METHOD("get_render_layer"), &Material::get_render_layer);
+
 	ClassDB::bind_method(D_METHOD("inspect_native_shader_code"), &Material::inspect_native_shader_code);
 	ClassDB::set_method_flags(get_class_static(), _scs_create("inspect_native_shader_code"), METHOD_FLAGS_DEFAULT | METHOD_FLAG_EDITOR);
 
 	ClassDB::bind_method(D_METHOD("create_placeholder"), &Material::create_placeholder);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_priority", PROPERTY_HINT_RANGE, itos(RENDER_PRIORITY_MIN) + "," + itos(RENDER_PRIORITY_MAX) + ",1"), "set_render_priority", "get_render_priority");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_layer", PROPERTY_HINT_ENUM, "Default,Post Opaque,Pre Alpha,Post Alpha,Final Draw (no copy)"), "set_render_layer", "get_render_layer");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "next_pass", PROPERTY_HINT_RESOURCE_TYPE, "Material"), "set_next_pass", "get_next_pass");
 
 	BIND_CONSTANT(RENDER_PRIORITY_MAX);
 	BIND_CONSTANT(RENDER_PRIORITY_MIN);
+
+	BIND_ENUM_CONSTANT(RENDER_LAYER_DEFAULT);
+	BIND_ENUM_CONSTANT(RENDER_LAYER_POST_OPAQUE);
+	BIND_ENUM_CONSTANT(RENDER_LAYER_PRE_ALPHA);
+	BIND_ENUM_CONSTANT(RENDER_LAYER_POST_ALPHA);
+	BIND_ENUM_CONSTANT(RENDER_LAYER_FINAL_DRAW);
 
 	GDVIRTUAL_BIND(_get_shader_rid)
 	GDVIRTUAL_BIND(_get_shader_mode)
@@ -173,6 +198,7 @@ void Material::_bind_methods() {
 
 Material::Material() {
 	render_priority = 0;
+	render_layer = Material::RENDER_LAYER_DEFAULT;
 }
 
 Material::~Material() {
@@ -386,7 +412,7 @@ bool ShaderMaterial::_property_can_revert(const StringName &p_name) const {
 			return true;
 		}
 		const String sname = p_name;
-		return sname == "render_priority" || sname == "next_pass";
+		return sname == "render_priority" || sname == "next_pass" || sname == "render_layer";
 	}
 	return false;
 }
@@ -399,6 +425,9 @@ bool ShaderMaterial::_property_get_revert(const StringName &p_name, Variant &r_p
 			return true;
 		} else if (p_name == "render_priority") {
 			r_property = 0;
+			return true;
+		} else if (p_name == "render_layer") {
+			r_property = Material::RENDER_LAYER_DEFAULT;
 			return true;
 		} else if (p_name == "next_pass") {
 			r_property = Variant();
@@ -495,7 +524,7 @@ void ShaderMaterial::_check_material_rid() const {
 			next_pass_rid = get_next_pass()->get_rid();
 		}
 
-		_set_material(RS::get_singleton()->material_create_from_shader(next_pass_rid, get_render_priority(), shader_rid));
+		_set_material(RS::get_singleton()->material_create_from_shader(next_pass_rid, get_render_priority(), get_render_layer(), shader_rid));
 
 		for (KeyValue<StringName, Variant> param : param_cache) {
 			if (param.value.get_type() == Variant::OBJECT) {
@@ -927,6 +956,10 @@ void BaseMaterial3D::_update_shader() {
 
 		if (stencil_flags & STENCIL_FLAG_WRITE_DEPTH_FAIL) {
 			code += "write_depth_fail,";
+		}
+
+		if (stencil_flags & STENCIL_FLAG_INCREMENT_CLAMP) {
+			code += "write_st_increment,";
 		}
 
 		switch (stencil_compare) {
@@ -2025,7 +2058,7 @@ void BaseMaterial3D::_check_material_rid() {
 			next_pass_rid = get_next_pass()->get_rid();
 		}
 
-		_set_material(RS::get_singleton()->material_create_from_shader(next_pass_rid, get_render_priority(), shader_rid));
+		_set_material(RS::get_singleton()->material_create_from_shader(next_pass_rid, get_render_priority(), get_render_layer(), shader_rid));
 
 		for (KeyValue<StringName, Variant> param : pending_params) {
 			RS::get_singleton()->material_set_param(_get_material(), param.key, param.value);
@@ -2941,6 +2974,7 @@ Ref<Material> BaseMaterial3D::get_material_for_2d(bool p_shaded, Transparency p_
 void BaseMaterial3D::set_on_top_of_alpha() {
 	set_transparency(TRANSPARENCY_DISABLED);
 	set_render_priority(RENDER_PRIORITY_MAX);
+	set_render_layer(RENDER_LAYER_DEFAULT);
 	set_flag(FLAG_DISABLE_DEPTH_TEST, true);
 }
 
@@ -3064,6 +3098,7 @@ void BaseMaterial3D::_prepare_stencil_effect() {
 			set_stencil_flags(STENCIL_FLAG_WRITE);
 			set_stencil_compare(STENCIL_COMPARE_ALWAYS);
 			stencil_next_pass->set_render_priority(-1);
+			stencil_next_pass->set_render_layer(RENDER_LAYER_FINAL_DRAW);
 			stencil_next_pass->set_shading_mode(SHADING_MODE_UNSHADED);
 			stencil_next_pass->set_transparency(TRANSPARENCY_ALPHA);
 			stencil_next_pass->set_flag(FLAG_DISABLE_DEPTH_TEST, true);
@@ -3606,7 +3641,7 @@ void BaseMaterial3D::_bind_methods() {
 
 	ADD_GROUP("Stencil", "stencil_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "stencil_mode", PROPERTY_HINT_ENUM, "Disabled,Outline,Xray,Custom"), "set_stencil_mode", "get_stencil_mode");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "stencil_flags", PROPERTY_HINT_FLAGS, "Read,Write,Write Depth Fail"), "set_stencil_flags", "get_stencil_flags");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "stencil_flags", PROPERTY_HINT_FLAGS, "Read,Write,Write Depth Fail,Write Increment"), "set_stencil_flags", "get_stencil_flags");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "stencil_compare", PROPERTY_HINT_ENUM, "Less,Equal,Less Or Equal,Greater,Not Equal,Greater Or Equal,Always"), "set_stencil_compare", "get_stencil_compare");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "stencil_reference", PROPERTY_HINT_RANGE, "0,255,1"), "set_stencil_reference", "get_stencil_reference");
 
@@ -3757,6 +3792,7 @@ void BaseMaterial3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(STENCIL_FLAG_READ);
 	BIND_ENUM_CONSTANT(STENCIL_FLAG_WRITE);
 	BIND_ENUM_CONSTANT(STENCIL_FLAG_WRITE_DEPTH_FAIL);
+	BIND_ENUM_CONSTANT(STENCIL_FLAG_INCREMENT_CLAMP);
 
 	BIND_ENUM_CONSTANT(STENCIL_COMPARE_LESS);
 	BIND_ENUM_CONSTANT(STENCIL_COMPARE_EQUAL);

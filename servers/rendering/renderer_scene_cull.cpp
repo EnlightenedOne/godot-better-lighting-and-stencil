@@ -3372,6 +3372,7 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 
 	max_shadows_used = 0;
 
+	// TODO disable this processing on frustum/non-primary camera
 	if (p_using_shadows) { //setup shadow maps
 
 		// Directional Shadows

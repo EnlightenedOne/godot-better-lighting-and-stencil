@@ -91,6 +91,7 @@ struct MaterialData {
 	void update_textures(const HashMap<StringName, Variant> &p_parameters, const HashMap<StringName, HashMap<int, RID>> &p_default_textures, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, RID *p_textures, bool p_use_linear_color);
 
 	virtual void set_render_priority(int p_priority) = 0;
+	virtual void set_render_layer(int p_render_layer) = 0;
 	virtual void set_next_pass(RID p_pass) = 0;
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty) = 0;
 	virtual void bind_uniforms() = 0;
@@ -126,6 +127,7 @@ struct Material {
 	bool texture_dirty = false;
 	HashMap<StringName, Variant> params;
 	int32_t priority = 0;
+	int32_t render_layer = 0;
 	RID next_pass;
 	SelfList<Material> update_element;
 
@@ -187,6 +189,7 @@ struct CanvasMaterialData : public MaterialData {
 	CanvasShaderData *shader_data = nullptr;
 
 	virtual void set_render_priority(int p_priority) {}
+	virtual void set_render_layer(int p_render_layer) {}
 	virtual void set_next_pass(RID p_pass) {}
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
 	virtual void bind_uniforms();
@@ -232,6 +235,7 @@ struct SkyMaterialData : public MaterialData {
 	bool uniform_set_updated = false;
 
 	virtual void set_render_priority(int p_priority) {}
+	virtual void set_render_layer(int p_render_layer) {}
 	virtual void set_next_pass(RID p_pass) {}
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
 	virtual void bind_uniforms();
@@ -362,7 +366,9 @@ struct SceneMaterialData : public MaterialData {
 	uint32_t index = 0;
 	RID next_pass;
 	uint8_t priority = 0;
+	uint8_t render_layer = 0;
 	virtual void set_render_priority(int p_priority);
+	virtual void set_render_layer(int p_render_layer);
 	virtual void set_next_pass(RID p_pass);
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
 	virtual void bind_uniforms();
@@ -413,6 +419,7 @@ struct ParticleProcessMaterialData : public MaterialData {
 	RID uniform_set;
 
 	virtual void set_render_priority(int p_priority) {}
+	virtual void set_render_layer(int p_render_layer) {}
 	virtual void set_next_pass(RID p_pass) {}
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
 	virtual void bind_uniforms();
@@ -628,6 +635,7 @@ public:
 
 	virtual void material_set_next_pass(RID p_material, RID p_next_material) override;
 	virtual void material_set_render_priority(RID p_material, int priority) override;
+	virtual void material_set_render_layer(RID p_material, int priority) override;
 
 	virtual bool material_is_animated(RID p_material) override;
 	virtual bool material_casts_shadows(RID p_material) override;

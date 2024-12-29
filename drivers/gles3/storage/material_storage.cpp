@@ -2220,6 +2220,7 @@ void MaterialStorage::shader_set_code(RID p_shader, const String &p_code) {
 				material->data->self = material->self;
 				material->data->set_next_pass(material->next_pass);
 				material->data->set_render_priority(material->priority);
+				material->data->set_render_layer(material->render_layer);
 			}
 			material->shader_mode = new_mode;
 		}
@@ -2416,6 +2417,7 @@ void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
 	material->data->self = p_material;
 	material->data->set_next_pass(material->next_pass);
 	material->data->set_render_priority(material->priority);
+	material->data->set_render_layer(material->render_layer);
 	//updating happens later
 	material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
 	_material_queue_update(material, true, true);
@@ -2475,6 +2477,16 @@ void MaterialStorage::material_set_render_priority(RID p_material, int priority)
 	material->priority = priority;
 	if (material->data) {
 		material->data->set_render_priority(priority);
+	}
+	material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
+}
+
+void MaterialStorage::material_set_render_layer(RID p_material, int render_layer) {
+	GLES3::Material *material = material_owner.get_or_null(p_material);
+	ERR_FAIL_NULL(material);
+	material->render_layer = render_layer;
+	if (material->data) {
+		material->data->set_render_layer(render_layer);
 	}
 	material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
 }
@@ -3113,6 +3125,10 @@ GLES3::ShaderData *GLES3::_create_scene_shader_func() {
 
 void SceneMaterialData::set_render_priority(int p_priority) {
 	priority = p_priority - RS::MATERIAL_RENDER_PRIORITY_MIN; //8 bits
+}
+
+void SceneMaterialData::set_render_layer(int p_render_layer) {
+	p_render_layer = p_render_layer;
 }
 
 void SceneMaterialData::set_next_pass(RID p_pass) {

@@ -85,6 +85,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	int stencil_readi = 0;
 	int stencil_writei = 0;
 	int stencil_write_depth_faili = 0;
+	int stencil_flag_increment_clampi = 0;
 	int stencil_comparei = STENCIL_COMPARE_ALWAYS;
 	int stencil_referencei = -1;
 
@@ -158,6 +159,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.stencil_mode_values["read"] = Pair<int *, int>(&stencil_readi, STENCIL_FLAG_READ);
 	actions.stencil_mode_values["write"] = Pair<int *, int>(&stencil_writei, STENCIL_FLAG_WRITE);
 	actions.stencil_mode_values["write_depth_fail"] = Pair<int *, int>(&stencil_write_depth_faili, STENCIL_FLAG_WRITE_DEPTH_FAIL);
+	actions.stencil_mode_values["write_st_increment"] = Pair<int *, int>(&stencil_flag_increment_clampi, STENCIL_FLAG_INCREMENT_CLAMP);
 
 	actions.stencil_mode_values["compare_less"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_LESS);
 	actions.stencil_mode_values["compare_equal"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_EQUAL);
@@ -193,7 +195,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	uses_tangent |= uses_normal_map;
 
 	stencil_enabled = stencil_referencei != -1;
-	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili;
+	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili | stencil_flag_increment_clampi;
 	stencil_compare = StencilCompare(stencil_comparei);
 	stencil_reference = stencil_referencei;
 
@@ -322,10 +324,41 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 	// Color pass -> attachment 0: Color/Diffuse, attachment 1: Separate Specular, attachment 2: Motion Vectors
 	RD::PipelineColorBlendState::Attachment blend_attachment = blend_mode_to_blend_attachment(BlendMode(blend_mode));
 	RD::PipelineColorBlendState blend_state_color_blend;
+	RD::PipelineColorBlendState blend_state_color_opaque;
+	RD::PipelineColorBlendState blend_state_depth_normal_roughness;
+	RD::PipelineColorBlendState blend_state_depth_normal_roughness_giprobe;
+
 	blend_state_color_blend.attachments = { blend_attachment, RD::PipelineColorBlendState::Attachment(), RD::PipelineColorBlendState::Attachment() };
-	RD::PipelineColorBlendState blend_state_color_opaque = RD::PipelineColorBlendState::create_disabled(3);
-	RD::PipelineColorBlendState blend_state_depth_normal_roughness = RD::PipelineColorBlendState::create_disabled(1);
-	RD::PipelineColorBlendState blend_state_depth_normal_roughness_giprobe = RD::PipelineColorBlendState::create_disabled(2);
+	blend_state_color_opaque = RD::PipelineColorBlendState::create_disabled(3);
+	blend_state_depth_normal_roughness = RD::PipelineColorBlendState::create_disabled(1);
+	blend_state_depth_normal_roughness_giprobe = RD::PipelineColorBlendState::create_disabled(2);
+
+	// From an attempt at depth/stencil only writing, gave up and wrote to colour
+	/*for (RD::PipelineColorBlendState::Attachment& attachment : blend_state_color_blend.attachments) {
+		attachment.write_a = blend_attachment.write_a;
+		attachment.write_r = blend_attachment.write_r;
+		attachment.write_g = blend_attachment.write_g;
+		attachment.write_b = blend_attachment.write_b;
+	}
+
+	for (RD::PipelineColorBlendState::Attachment& attachment : blend_state_color_opaque.attachments) {
+		attachment.write_a = blend_attachment.write_a;
+		attachment.write_r = blend_attachment.write_r;
+		attachment.write_g = blend_attachment.write_g;
+		attachment.write_b = blend_attachment.write_b;
+	}
+	for (RD::PipelineColorBlendState::Attachment& attachment : blend_state_depth_normal_roughness.attachments) {
+		attachment.write_a = blend_attachment.write_a;
+		attachment.write_r = blend_attachment.write_r;
+		attachment.write_g = blend_attachment.write_g;
+		attachment.write_b = blend_attachment.write_b;
+	}
+	for (RD::PipelineColorBlendState::Attachment& attachment : blend_state_depth_normal_roughness_giprobe.attachments) {
+		attachment.write_a = blend_attachment.write_a;
+		attachment.write_r = blend_attachment.write_r;
+		attachment.write_g = blend_attachment.write_g;
+		attachment.write_b = blend_attachment.write_b;
+	}*/
 
 	RD::PipelineDepthStencilState depth_stencil_state;
 
@@ -375,7 +408,8 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 		}
 
 		if (stencil_flags & STENCIL_FLAG_WRITE) {
-			op.pass = RD::STENCIL_OP_REPLACE;
+			op.pass = (stencil_flags & STENCIL_FLAG_INCREMENT_CLAMP) == STENCIL_FLAG_INCREMENT_CLAMP ?
+				RD::STENCIL_OP_INCREMENT_AND_CLAMP : RD::STENCIL_OP_REPLACE;
 			op.write_mask = stencil_mask;
 		}
 
@@ -557,6 +591,10 @@ RendererRD::MaterialStorage::ShaderData *SceneShaderForwardClustered::_create_sh
 
 void SceneShaderForwardClustered::MaterialData::set_render_priority(int p_priority) {
 	priority = p_priority - RS::MATERIAL_RENDER_PRIORITY_MIN; //8 bits
+}
+
+void SceneShaderForwardClustered::MaterialData::set_render_layer(int p_render_layer) {
+	render_layer = p_render_layer;
 }
 
 void SceneShaderForwardClustered::MaterialData::set_next_pass(RID p_pass) {

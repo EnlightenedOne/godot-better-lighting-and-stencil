@@ -893,7 +893,11 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 			// Opaque fills motion and alpha lists.
 			render_list[RENDER_LIST_MOTION].clear();
 			render_list[RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS].clear(); // Opaque fills opaque_no_depth_prepass too.
+			render_list[RENDER_LIST_STENCIL_POST_OPAQUE].clear();
+			render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].clear();
+			render_list[RENDER_LIST_STENCIL_POST_ALPHA].clear();
 			render_list[RENDER_LIST_ALPHA].clear();
+			render_list[RENDER_LIST_STENCIL_ALPHA].clear();
 		}
 	}
 
@@ -1093,10 +1097,20 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 				}
 
 				if (force_alpha || (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_ALPHA)) {
-					surf->color_pass_inclusion_mask = COLOR_PASS_FLAG_TRANSPARENT;
-					render_list[RENDER_LIST_ALPHA].add_element(surf);
-					if (uses_gi) {
-						surf->sort.uses_forward_gi = 1;
+					if (surf->material->render_layer == Material::RENDER_LAYER_POST_OPAQUE) {
+						render_list[RENDER_LIST_STENCIL_POST_OPAQUE].add_element(surf);
+					} else if (surf->material->render_layer == Material::RENDER_LAYER_PRE_ALPHA) {
+						render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].add_element(surf);
+					} else if (surf->material->render_layer == Material::RENDER_LAYER_POST_ALPHA) {
+						render_list[RENDER_LIST_STENCIL_POST_ALPHA].add_element(surf);
+					} else if (surf->material->render_layer == Material::RENDER_LAYER_FINAL_DRAW) {
+						render_list[RENDER_LIST_STENCIL_ALPHA].add_element(surf);
+					}  else {
+						surf->color_pass_inclusion_mask = COLOR_PASS_FLAG_TRANSPARENT;
+						render_list[RENDER_LIST_ALPHA].add_element(surf);
+						if (uses_gi) {
+							surf->sort.uses_forward_gi = 1;
+						}
 					}
 				} else if (p_using_motion_pass && (uses_motion || (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_MOTION_VECTOR))) {
 					surf->color_pass_inclusion_mask = COLOR_PASS_FLAG_MOTION_VECTORS;
@@ -1489,7 +1503,14 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 
 	// Render GI
 
-	bool render_shadows = p_render_data->directional_shadows.size() || p_render_data->shadows.size();
+	// Disabling shadows on frustum is a hack as there isnt a subviewport option to disable shadows for some godforsaken reason
+	bool forceKillShadow = p_render_data->scene_data->cam_frustum;
+
+	if (forceKillShadow) {
+		RENDER_TIMESTAMP("Shadows Disabled for Frustum");
+	}
+
+	bool render_shadows = !forceKillShadow && (p_render_data->directional_shadows.size() || p_render_data->shadows.size());
 	bool render_gi = rb.is_valid() && p_use_gi;
 
 	if (render_shadows && render_gi) {
@@ -1820,13 +1841,21 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_MOTION].sort_by_key();
 	render_list[RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS].sort_by_key();
+	render_list[RENDER_LIST_STENCIL_POST_OPAQUE].sort_by_key();
+	render_list[RENDER_LIST_STENCIL_POST_ALPHA].sort_by_key();
+	render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
+	render_list[RENDER_LIST_STENCIL_ALPHA].sort_by_key();
 
 	int *render_info = p_render_data->render_info ? p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE] : (int *)nullptr;
 	_fill_instance_data(RENDER_LIST_OPAQUE, render_info);
 	_fill_instance_data(RENDER_LIST_MOTION, render_info);
 	_fill_instance_data(RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS, render_info);
+	_fill_instance_data(RENDER_LIST_STENCIL_POST_OPAQUE, render_info);
+	_fill_instance_data(RENDER_LIST_STENCIL_POST_ALPHA, render_info);
+	_fill_instance_data(RENDER_LIST_PRE_ALPHA_OVERLAY, render_info);
 	_fill_instance_data(RENDER_LIST_ALPHA, render_info);
+	_fill_instance_data(RENDER_LIST_STENCIL_ALPHA, render_info);
 
 	RD::get_singleton()->draw_command_end_label();
 
@@ -2049,6 +2078,37 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 		RD::get_singleton()->draw_command_end_label();
 
+		/*{
+			RENDER_TIMESTAMP("Render Pre-Opaque Pass");
+			RD::get_singleton()->draw_command_begin_label("Render Pre-Opaque Pass");
+
+			p_render_data->scene_data->directional_light_count = p_render_data->directional_light_count;
+			p_render_data->scene_data->opaque_prepass_threshold = 0.0f;
+
+			// Transparent attempt below, from pre opaque stencil
+			rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_STENCIL_PRE_OPAQUE, p_render_data, radiance_texture, samplers, true);
+
+			uint32_t transparent_color_pass_flags = (color_pass_flags | COLOR_PASS_FLAG_TRANSPARENT) & ~(COLOR_PASS_FLAG_SEPARATE_SPECULAR);
+			if (using_motion_pass) {
+				// Motion vectors on transparent draw calls are not required when using the reactive mask.
+				transparent_color_pass_flags &= ~(COLOR_PASS_FLAG_MOTION_VECTORS);
+			}
+
+			RID alpha_framebuffer = rb_data.is_valid() ? rb_data->get_color_pass_fb(transparent_color_pass_flags) : color_only_framebuffer;
+
+			{
+				RenderListParameters render_list_params(render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].elements.ptr(), render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+				_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_CONTINUE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_CONTINUE);
+			}
+
+			// From attempt to just hit the stencil/depth buffer
+			//RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_STENCIL_PRE_OPAQUE, nullptr, RID(), samplers);
+			//RenderListParameters render_list_params(render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].elements.ptr(), render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_STENCIL_PRE_OPAQUE].elements.size(), reverse_cull, depth_pass_mode, 0, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+			//_render_list_with_draw_list(&render_list_params, depth_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE, Vector<Color>());
+
+			RD::get_singleton()->draw_command_end_label();
+		}*/
+
 		if (use_msaa) {
 			RENDER_TIMESTAMP("Resolve Depth Pre-Pass (MSAA)");
 			RD::get_singleton()->draw_command_begin_label("Resolve Depth Pre-Pass (MSAA)");
@@ -2132,7 +2192,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 			if (scene_state.used_opaque_no_depth_prepass) {
 				rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS, p_render_data, radiance_texture, samplers, true);
 				RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS].elements.ptr(), render_list[RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS].element_info.ptr(), render_list[RENDER_LIST_OPAQUE_NO_DEPTH_PREPASS].elements.size(), reverse_cull, PASS_MODE_COLOR, opaque_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
-				_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE, c, 0.0, 0);
+				_render_list_with_draw_list(&render_list_params, opaque_framebuffer, RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE);
 			}
 		}
 
@@ -2174,6 +2234,30 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 		RENDER_TIMESTAMP("Process Post Opaque Compositor Effects");
 		_process_compositor_effects(RS::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_OPAQUE, p_render_data);
+
+		RENDER_TIMESTAMP("Render Post-Opaque Pass");
+
+		RD::get_singleton()->draw_command_begin_label("Render Post-Opaque Pass");
+
+		p_render_data->scene_data->directional_light_count = p_render_data->directional_light_count;
+		p_render_data->scene_data->opaque_prepass_threshold = 0.0f;
+
+		rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_STENCIL_POST_OPAQUE, p_render_data, radiance_texture, samplers, true);
+
+		uint32_t transparent_color_pass_flags = (color_pass_flags | COLOR_PASS_FLAG_TRANSPARENT) & ~(COLOR_PASS_FLAG_SEPARATE_SPECULAR);
+		if (using_motion_pass) {
+			// Motion vectors on transparent draw calls are not required when using the reactive mask.
+			transparent_color_pass_flags &= ~(COLOR_PASS_FLAG_MOTION_VECTORS);
+		}
+
+		RID alpha_framebuffer = rb_data.is_valid() ? rb_data->get_color_pass_fb(transparent_color_pass_flags) : color_only_framebuffer;
+
+		{
+			RenderListParameters render_list_params(render_list[RENDER_LIST_STENCIL_POST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_STENCIL_POST_OPAQUE].element_info.ptr(), render_list[RENDER_LIST_STENCIL_POST_OPAQUE].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+			_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_CONTINUE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_CONTINUE);
+		}
+
+		RD::get_singleton()->draw_command_end_label();
 	}
 
 	if (debug_voxelgis) {
@@ -2315,6 +2399,47 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		_process_compositor_effects(RS::COMPOSITOR_EFFECT_CALLBACK_TYPE_PRE_TRANSPARENT, p_render_data);
 	}
 
+	if (render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].elements.size() > 0) {
+		RENDER_TIMESTAMP("Render 3D Pre-Transparent Pass");
+
+		RD::get_singleton()->draw_command_begin_label("Render 3D Pre-Transparent Pass");
+
+		rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_PRE_ALPHA_OVERLAY, p_render_data, radiance_texture, samplers, true);
+
+		_setup_environment(p_render_data, is_reflection_probe, screen_size, p_default_bg_color, false);
+
+		{
+			uint32_t transparent_color_pass_flags = (color_pass_flags | COLOR_PASS_FLAG_TRANSPARENT) & ~(COLOR_PASS_FLAG_SEPARATE_SPECULAR);
+			if (using_motion_pass) {
+				// Motion vectors on transparent draw calls are not required when using the reactive mask.
+				transparent_color_pass_flags &= ~(COLOR_PASS_FLAG_MOTION_VECTORS);
+			}
+
+			RID alpha_framebuffer = rb_data.is_valid() ? rb_data->get_color_pass_fb(transparent_color_pass_flags) : color_only_framebuffer;
+
+			{
+				RenderListParameters render_list_params(render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].elements.ptr(), render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].element_info.ptr(), render_list[RENDER_LIST_PRE_ALPHA_OVERLAY].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+				_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE);
+			}
+
+			RD::get_singleton()->draw_command_end_label();
+
+			if (scene_state.used_screen_texture) {
+				RENDER_TIMESTAMP("Copy Screen Texture");
+
+				// Copy screen texture to backbuffer so we can read from it
+				_render_buffers_copy_screen_texture(p_render_data);
+			}
+
+			if (scene_state.used_depth_texture) {
+				RENDER_TIMESTAMP("Copy Depth Texture");
+
+				// Copy depth texture to backbuffer so we can read from it
+				_render_buffers_copy_depth_texture(p_render_data);
+			}
+		}
+	}
+
 	RENDER_TIMESTAMP("Render 3D Transparent Pass");
 
 	RD::get_singleton()->draw_command_begin_label("Render 3D Transparent Pass");
@@ -2331,8 +2456,68 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		}
 
 		RID alpha_framebuffer = rb_data.is_valid() ? rb_data->get_color_pass_fb(transparent_color_pass_flags) : color_only_framebuffer;
-		RenderListParameters render_list_params(render_list[RENDER_LIST_ALPHA].elements.ptr(), render_list[RENDER_LIST_ALPHA].element_info.ptr(), render_list[RENDER_LIST_ALPHA].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
-		_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE);
+
+		bool postAlphaRun = render_list[RENDER_LIST_STENCIL_POST_ALPHA].elements.size() > 0;
+
+		{
+			RenderListParameters render_list_params(render_list[RENDER_LIST_ALPHA].elements.ptr(), render_list[RENDER_LIST_ALPHA].element_info.ptr(), render_list[RENDER_LIST_ALPHA].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+			_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, postAlphaRun ? RD::FINAL_ACTION_STORE : RD::FINAL_ACTION_CONTINUE, RD::INITIAL_ACTION_LOAD, postAlphaRun ? RD::FINAL_ACTION_STORE : RD::FINAL_ACTION_CONTINUE);
+		}
+
+		{
+			if (postAlphaRun) {
+
+				if (scene_state.used_screen_texture) {
+					RENDER_TIMESTAMP("Copy Screen Texture");
+
+					// Copy screen texture to backbuffer so we can read from it
+					_render_buffers_copy_screen_texture(p_render_data);
+				}
+
+				if (scene_state.used_depth_texture) {
+					RENDER_TIMESTAMP("Copy Depth Texture");
+
+					// Copy depth texture to backbuffer so we can read from it
+					_render_buffers_copy_depth_texture(p_render_data);
+				}
+
+				RENDER_TIMESTAMP("Render 3D Stencil Post Alpha Pass");
+
+				RD::get_singleton()->draw_command_begin_label("Render 3D Stencil Post Alpha Pass");
+
+				rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_STENCIL_POST_ALPHA, p_render_data, radiance_texture, samplers, true);
+
+				_setup_environment(p_render_data, is_reflection_probe, screen_size, p_default_bg_color, false);
+
+				{
+					uint32_t transparent_color_pass_flags = (color_pass_flags | COLOR_PASS_FLAG_TRANSPARENT) & ~(COLOR_PASS_FLAG_SEPARATE_SPECULAR);
+					if (using_motion_pass) {
+						// Motion vectors on transparent draw calls are not required when using the reactive mask.
+						transparent_color_pass_flags &= ~(COLOR_PASS_FLAG_MOTION_VECTORS);
+					}
+
+					RID alpha_framebuffer = rb_data.is_valid() ? rb_data->get_color_pass_fb(transparent_color_pass_flags) : color_only_framebuffer;
+
+					{
+						RenderListParameters render_list_params(render_list[RENDER_LIST_STENCIL_POST_ALPHA].elements.ptr(), render_list[RENDER_LIST_STENCIL_POST_ALPHA].element_info.ptr(), render_list[RENDER_LIST_STENCIL_POST_ALPHA].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+						_render_list_with_draw_list(&render_list_params, alpha_framebuffer, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE, RD::INITIAL_ACTION_LOAD, RD::FINAL_ACTION_STORE);
+					}
+
+					RD::get_singleton()->draw_command_end_label();
+				}
+			}
+		}
+
+		{
+			RD::get_singleton()->draw_command_end_label();
+			RENDER_TIMESTAMP("Render 3D Transparent Pass Stencil Alpha");
+
+			RD::get_singleton()->draw_command_begin_label("Render 3D Transparent Pass Stencil Alpha");
+
+			rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_STENCIL_ALPHA, p_render_data, radiance_texture, samplers, true);
+			RenderListParameters render_list_params(render_list[RENDER_LIST_STENCIL_ALPHA].elements.ptr(), render_list[RENDER_LIST_STENCIL_ALPHA].element_info.ptr(), render_list[RENDER_LIST_STENCIL_ALPHA].elements.size(), reverse_cull, PASS_MODE_COLOR, transparent_color_pass_flags, rb_data.is_null(), p_render_data->directional_light_soft_shadows, rp_uniform_set, get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME, Vector2(), p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, p_render_data->scene_data->view_count, 0, base_specialization);
+			_render_list_with_draw_list(&render_list_params, alpha_framebuffer, postAlphaRun ? RD::INITIAL_ACTION_LOAD : RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE, postAlphaRun ? RD::INITIAL_ACTION_LOAD : RD::INITIAL_ACTION_CONTINUE, RD::FINAL_ACTION_STORE);
+		}
 	}
 
 	RD::get_singleton()->draw_command_end_label();
