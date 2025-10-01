@@ -1501,8 +1501,13 @@ void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, boo
 	}
 
 	// Render GI
+	// Disabling shadows on frustum is a hack as there isnt a subviewport option to disable shadows for some godforsaken reason
+	bool forceKillShadow = p_render_data->scene_data->cam_frustum;
+	if (forceKillShadow) {
+		RENDER_TIMESTAMP("Shadows Disabled for Frustum");
+	}
 
-	bool render_shadows = p_render_data->directional_shadows.size() || p_render_data->shadows.size();
+	bool render_shadows = !forceKillShadow && (p_render_data->directional_shadows.size() || p_render_data->shadows.size());
 	bool render_gi = rb.is_valid() && p_use_gi;
 
 	if (render_shadows && render_gi) {

@@ -1600,6 +1600,9 @@ void SkyRD::update_dirty_skys() {
 				}
 			}
 
+			// Mipmaps can take up to half a millisecond to copy, on the SteamDeck this gives huge gains
+			mipmaps = 2;
+
 			if (sky_use_cubemap_array) {
 				//array (higher quality, 6 times more memory)
 				RD::TextureFormat tf;
