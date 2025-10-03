@@ -2033,6 +2033,9 @@ void main() {
 #ifdef LIGHT_ANISOTROPY_USED
 					binormal, tangent, anisotropy,
 #endif
+#ifdef LIGHT_INDEX_USED
+					i,
+#endif
 					diffuse_light,
 					direct_specular_light);
 		}
