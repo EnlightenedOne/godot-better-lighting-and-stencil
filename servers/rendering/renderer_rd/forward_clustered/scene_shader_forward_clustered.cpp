@@ -87,6 +87,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	int stencil_readi = 0;
 	int stencil_writei = 0;
 	int stencil_write_depth_faili = 0;
+	int stencil_flag_increment_clampi = 0;
 	int stencil_comparei = STENCIL_COMPARE_ALWAYS;
 	int stencil_referencei = -1;
 
@@ -154,6 +155,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	actions.stencil_mode_values["read"] = Pair<int *, int>(&stencil_readi, STENCIL_FLAG_READ);
 	actions.stencil_mode_values["write"] = Pair<int *, int>(&stencil_writei, STENCIL_FLAG_WRITE);
 	actions.stencil_mode_values["write_depth_fail"] = Pair<int *, int>(&stencil_write_depth_faili, STENCIL_FLAG_WRITE_DEPTH_FAIL);
+	actions.stencil_mode_values["write_st_increment"] = Pair<int *, int>(&stencil_flag_increment_clampi, STENCIL_FLAG_INCREMENT_CLAMP);
 
 	actions.stencil_mode_values["compare_less"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_LESS);
 	actions.stencil_mode_values["compare_equal"] = Pair<int *, int>(&stencil_comparei, STENCIL_COMPARE_EQUAL);
@@ -206,7 +208,7 @@ void SceneShaderForwardClustered::ShaderData::set_code(const String &p_code) {
 	uses_tangent |= uses_bent_normal_map;
 
 	stencil_enabled = stencil_referencei != -1;
-	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili;
+	stencil_flags = stencil_readi | stencil_writei | stencil_write_depth_faili | stencil_flag_increment_clampi;
 	stencil_compare = StencilCompare(stencil_comparei);
 	stencil_reference = stencil_referencei;
 
@@ -357,6 +359,11 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 		if (depth_test == DEPTH_TEST_ENABLED_INVERTED) {
 			depth_stencil_state.depth_compare_operator = RD::COMPARE_OP_LESS;
 		}
+	} else if (depth_draw == DEPTH_DRAW_ALWAYS) {
+		// This allows transparent always to overwrite for replacing layers (think character stencil)
+		depth_stencil_state.enable_depth_test = true;
+		depth_stencil_state.enable_depth_write = true;
+		depth_stencil_state.depth_compare_operator = RD::COMPARE_OP_ALWAYS;
 	}
 
 	bool use_stencil = stencil_enabled && p_pipeline_key.version == PIPELINE_VERSION_COLOR_PASS;
@@ -388,7 +395,8 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 		}
 
 		if (stencil_flags & STENCIL_FLAG_WRITE) {
-			op.pass = RD::STENCIL_OP_REPLACE;
+			op.pass = (stencil_flags & STENCIL_FLAG_INCREMENT_CLAMP) == STENCIL_FLAG_INCREMENT_CLAMP ?
+				RD::STENCIL_OP_INCREMENT_AND_CLAMP : RD::STENCIL_OP_REPLACE;
 			op.write_mask = stencil_mask;
 		}
 
@@ -567,6 +575,10 @@ RendererRD::MaterialStorage::ShaderData *SceneShaderForwardClustered::_create_sh
 
 void SceneShaderForwardClustered::MaterialData::set_render_priority(int p_priority) {
 	priority = p_priority - RS::MATERIAL_RENDER_PRIORITY_MIN; //8 bits
+}
+
+void SceneShaderForwardClustered::MaterialData::set_render_layer(int p_render_layer) {
+	render_layer = p_render_layer;
 }
 
 void SceneShaderForwardClustered::MaterialData::set_next_pass(RID p_pass) {

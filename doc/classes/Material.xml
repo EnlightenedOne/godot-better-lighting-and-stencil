@@ -60,6 +60,9 @@
 			[b]Note:[/b] This only applies to [StandardMaterial3D]s and [ShaderMaterial]s with type "Spatial".
 			[b]Note:[/b] This will not impact how transparent objects are sorted relative to opaque objects or how dynamic meshes will be sorted relative to other opaque meshes. This is because all transparent objects are drawn after all opaque objects and all dynamic opaque meshes are drawn before other opaque meshes.
 		</member>
+		<member name="render_layer" type="int" setter="set_render_layer" getter="get_render_layer" enum="Material.RenderLayer" default="0">
+			Determines when rendering takes place. See [enum RenderLayer].
+		</member>
 	</members>
 	<constants>
 		<constant name="RENDER_PRIORITY_MAX" value="127">
@@ -67,6 +70,21 @@
 		</constant>
 		<constant name="RENDER_PRIORITY_MIN" value="-128">
 			Minimum value for the [member render_priority] parameter.
+		</constant>
+		<constant name="RENDER_LAYER_DEFAULT" value="0" enum="RenderLayer">
+			Let the engine do its thing.
+		</constant>
+		<constant name="RENDER_LAYER_POST_OPAQUE" value="1" enum="RenderLayer">
+			Drawn after the opaque layer, copies screen texture.
+		</constant>
+		<constant name="RENDER_LAYER_PRE_ALPHA" value="2" enum="RenderLayer">
+			Drawn after the post opaque layer, copies screen texture.
+		</constant>
+		<constant name="RENDER_LAYER_POST_ALPHA" value="3" enum="RenderLayer">
+			Drawn after the post opaque layer, copies screen texture.
+		</constant>
+		<constant name="RENDER_LAYER_FINAL_DRAW" value="4" enum="RenderLayer">
+			Drawn after the post alpha layer, DOES NOT copy screen texture.
 		</constant>
 	</constants>
 </class>

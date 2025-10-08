@@ -2688,7 +2688,11 @@ void VisualShader::_update_shader() const {
 					render_mode += temp + "_" + info.options[modes[temp]];
 				} else {
 					// Use the default.
-					render_mode += temp + "_" + info.options[0];
+					if (temp == "stencil_compare") {
+						render_mode += temp + "_" + info.options[BaseMaterial3D::STENCIL_COMPARE_GREATER_OR_EQUAL];
+					} else {
+						render_mode += temp + "_" + info.options[0];
+					}
 				}
 			} else if (flags.has(temp)) {
 				flag_names.push_back(temp);
