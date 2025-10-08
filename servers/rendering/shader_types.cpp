@@ -254,6 +254,7 @@ ShaderTypes::ShaderTypes() {
 		shader_modes[RS::SHADER_SPATIAL].stencil_modes.push_back({ PNAME("read") });
 		shader_modes[RS::SHADER_SPATIAL].stencil_modes.push_back({ PNAME("write") });
 		shader_modes[RS::SHADER_SPATIAL].stencil_modes.push_back({ PNAME("write_depth_fail") });
+		shader_modes[RS::SHADER_SPATIAL].stencil_modes.push_back({ PNAME("write_st_increment") });
 		shader_modes[RS::SHADER_SPATIAL].stencil_modes.push_back({ PNAME("compare"), { "always", "less", "equal", "less_or_equal", "greater", "not_equal", "greater_or_equal" } });
 	}
 

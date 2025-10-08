@@ -870,6 +870,9 @@
 		<constant name="STENCIL_FLAG_WRITE_DEPTH_FAIL" value="4" enum="StencilFlags">
 			The material will write the reference value to the stencil buffer where it fails the depth test.
 		</constant>
+		<constant name="STENCIL_FLAG_INCREMENT_CLAMP" value="8" enum="StencilFlags">
+			The material will increment the stencil write value ref by 1 clamped to 255.
+		</constant>
 		<constant name="STENCIL_COMPARE_ALWAYS" value="0" enum="StencilCompare">
 			Always passes the stencil test.
 		</constant>

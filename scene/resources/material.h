@@ -41,9 +41,22 @@ class Material : public Resource {
 	RES_BASE_EXTENSION("material")
 	OBJ_SAVE_TYPE(Material);
 
+public:
+	enum RenderLayer {
+		RENDER_LAYER_DEFAULT,
+		RENDER_LAYER_POST_OPAQUE,
+		RENDER_LAYER_PRE_ALPHA,
+		RENDER_LAYER_POST_ALPHA,
+		RENDER_LAYER_FINAL_DRAW,
+
+		RENDER_LAYER_MAX // Not an actual pass, just the amount of passes.
+	};
+
+private:
 	mutable RID material;
 	Ref<Material> next_pass;
 	int render_priority;
+	RenderLayer render_layer;
 
 	enum {
 		INIT_STATE_UNINITIALIZED,
@@ -83,6 +96,9 @@ public:
 	void set_render_priority(int p_priority);
 	int get_render_priority() const;
 
+	void set_render_layer(RenderLayer p_render_layer);
+	RenderLayer get_render_layer() const;
+
 	virtual RID get_rid() const override;
 	virtual RID get_shader_rid() const;
 	virtual Shader::Mode get_shader_mode() const;
@@ -92,6 +108,8 @@ public:
 	Material();
 	virtual ~Material();
 };
+
+VARIANT_ENUM_CAST(Material::RenderLayer)
 
 class ShaderMaterial : public Material {
 	GDCLASS(ShaderMaterial, Material);
@@ -340,8 +358,9 @@ public:
 		STENCIL_FLAG_READ = 1,
 		STENCIL_FLAG_WRITE = 2,
 		STENCIL_FLAG_WRITE_DEPTH_FAIL = 4,
+		STENCIL_FLAG_INCREMENT_CLAMP = 8,
 
-		STENCIL_FLAG_NUM_BITS = 3 // Not an actual mode, just the amount of bits.
+		STENCIL_FLAG_NUM_BITS = 4 // Not an actual mode, just the amount of bits.
 	};
 
 	enum StencilCompare {

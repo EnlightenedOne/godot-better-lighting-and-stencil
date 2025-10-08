@@ -1055,7 +1055,7 @@ void SkyRD::setup_sky(const RenderDataRD *p_render_data, const Size2i p_screen_s
 			sky->reflection.dirty = true;
 		}
 
-		if (!p_render_data->scene_data->cam_transform.origin.is_equal_approx(sky->prev_position) && shader_data->uses_position) {
+		if (!p_render_data->scene_data->cam_frustum && !p_render_data->scene_data->cam_transform.origin.is_equal_approx(sky->prev_position) && shader_data->uses_position) {
 			sky->prev_position = p_render_data->scene_data->cam_transform.origin;
 			sky->reflection.dirty = true;
 		}
