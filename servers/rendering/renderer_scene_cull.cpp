@@ -3184,10 +3184,14 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 			}
 		}
 
-		RSG::light_storage->set_directional_shadow_count(lights_with_shadow.size());
+		if (p_camera_data->is_frustum) {
+			RSG::light_storage->set_directional_shadow_count(0);
+		} else {
+			RSG::light_storage->set_directional_shadow_count(lights_with_shadow.size());
 
-		for (int i = 0; i < lights_with_shadow.size(); i++) {
-			_light_instance_setup_directional_shadow(i, lights_with_shadow[i], p_camera_data->main_transform, p_camera_data->main_projection, p_camera_data->is_orthogonal, p_camera_data->vaspect);
+			for (int i = 0; i < lights_with_shadow.size(); i++) {
+				_light_instance_setup_directional_shadow(i, lights_with_shadow[i], p_camera_data->main_transform, p_camera_data->main_projection, p_camera_data->is_orthogonal, p_camera_data->vaspect);
+			}
 		}
 	}
 
@@ -3277,7 +3281,6 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 
 	max_shadows_used = 0;
 
-	// TODO disable this processing on frustum/non-primary camera
 	if (p_using_shadows) { //setup shadow maps
 
 		// Directional Shadows
